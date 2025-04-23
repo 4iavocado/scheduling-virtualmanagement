@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contiguous Memory Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
+  <style>
+    body {
+      background: linear-gradient(135deg, #1e3c72, #2a5298);
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px 0;
+    }
+    
+    .header h1 {
+      font-size: 36px;
+      letter-spacing: 1px;
+    }
+    
+    .card {
+      background-color: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      border-radius: 20px;
+      border: none;
+      color: white;
+      margin-bottom: 20px;
+    }
+    
+    .card-header {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px 20px 0 0 !important;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    
+    .input-memory-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    
+    .process-input {
+      flex: 1;
+      min-width: 300px;
+    }
+    
+    .memory-file {
+      flex: 2;
+      min-width: 400px;
+    }
+    
+    .process-section {
+      flex: 2;
+      min-width: 400px;
+    }
+    
+    .memory-visualization {
+      height: 500px;
+      overflow-y: auto;
+      border-radius: 10px;
+      padding: 10px;
+      background-color: rgba(0, 0, 0, 0.2);
+    }
+    
+    .memory-block {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: bold;
+    }
+    
+    .memory-block.free {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .memory-block.allocated {
+      background: linear-gradient(90deg, #92fe9d, #00c9ff);
+      color: #1e3c72;
+    }
+    
+    table {
+      width: 100%;
+      color: white;
+    }
+    
+    th, td {
+      padding: 12px 15px;
+    }
+    
+    .table-striped>tbody>tr:nth-of-type(odd)>* {
+      background-color: rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+    
+    .btn-primary {
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid white;
+      border-radius: 50px;
+      padding: 8px 25px;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+      background-color: white;
+      color: #1e3c72;
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(255, 255, 255, 0.2);
+      border-color: white;
+    }
+    
+    .form-control {
+      background-color: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      border-radius: 50px;
+    }
+    
+    .form-control:focus {
+      background-color: rgba(255, 255, 255, 0.15);
+      color: white;
+      border-color: white;
+      box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25);
+    }
+    
+    .form-control::placeholder {
+      color: rgba(255, 255, 255, 0.7);
+    }
+    
+    .form-label {
+      font-weight: bold;
+    }
+    
+    /* Success and failure colors for process status */
+    .status-allocated {
+      color: #92fe9d;
+    }
+    
+    .status-failed {
+      color: #ff6b6b;
+    }
+    
+    .status-waiting {
+      color: #f7f7f7;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Contiguous Memory Management</h1>
+  </div>
+
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Left Column: Process Input and Controls -->
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header">Process Input</div>
+          <div class="card-body">
+            <form id="process-form">
+              <div class="mb-3">
+                <label for="process-name" class="form-label">Process Name</label>
+                <input type="text" class="form-control" id="process-name" placeholder="e.g., P1" required />
+              </div>
+              <div class="mb-3">
+                <label for="process-mb" class="form-label">Process Size (MB)</label>
+                <input type="number" class="form-control" id="process-mb" min="1" max="100" placeholder="Size in MB" required />
+              </div>
+              <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">Add Process</button>
+                <button type="button" class="btn btn-primary" id="allocate-btn">Allocate</button>
+                <button type="button" class="btn btn-primary" id="clear-btn">Clear All</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle Column: Process Table -->
+      <div class="col-md-3">
+        <div class="card h-100">
+          <div class="card-header">Processes</div>
+          <div class="card-body">
+            <table class="table table-striped" id="process-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Size</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Example processes -->
+                <tr>
+                  <td>P1</td>
+                  <td>20 MB</td>
+                  <td class="status-waiting">Waiting</td>
+                </tr>
+                <tr>
+                  <td>P2</td>
+                  <td>15 MB</td>
+                  <td class="status-waiting">Waiting</td>
+                </tr>
+                <tr>
+                  <td>P3</td>
+                  <td>30 MB</td>
+                  <td class="status-waiting">Waiting</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Memory Visualization -->
+      <div class="col-md-5">
+        <div class="card">
+          <div class="card-header">Memory Visualization</div>
+          <div class="card-body">
+            <div class="memory-visualization" id="memory-blocks">
+              <!-- Memory blocks get generated here -->
+              <div class="memory-block free">
+                <span>Block #1</span>
+                <span>Free 100 MB (0 - 100 MB)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // Global variables
+      let processes = [
+        { name: "P1", size: 20, status: "Waiting" },
+        { name: "P2", size: 15, status: "Waiting" },
+        { name: "P3", size: 30, status: "Waiting" }
+      ];
+      
+      let memoryBlocks = [
+        { id: 1, startAddress: 0, endAddress: 100, size: 100, status: "Free", processName: null }
+      ];
+      
+      const TOTAL_MEMORY = 100; // 100 MB
+
+      // DOM Elements
+      const processForm = document.getElementById("process-form");
+      const processNameInput = document.getElementById("process-name");
+      const processSizeInput = document.getElementById("process-mb");
+      const allocateBtn = document.getElementById("allocate-btn");
+      const clearBtn = document.getElementById("clear-btn");
+
+      // Initialize
+      renderProcessTable();
+      renderMemoryBlocks();
+
+      // Event Listeners
+      processForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        addProcess();
+      });
+
+      allocateBtn.addEventListener("click", allocateProcesses);
+      clearBtn.addEventListener("click", clearAll);
+
+      // Functions
+      function addProcess() {
+        const name = processNameInput.value.trim();
+        const size = parseInt(processSizeInput.value);
+
+        if (!name || !size || size <= 0 || size > TOTAL_MEMORY) {
+          alert("Please enter a valid process name and size (1-100 MB)");
+          return;
+        }
+
+        // Check for duplicate process name
+        if (processes.some(p => p.name === name)) {
+          alert("Process name already exists. Please use a unique name.");
+          return;
+        }
+
+        processes.push({
+          name: name,
+          size: size,
+          status: "Waiting"
+        });
+
+        // Reset form
+        processNameInput.value = "";
+        processSizeInput.value = "";
+        
+        // Update UI
+        renderProcessTable();
+      }
+
+      function allocateProcesses() {
+        // Using best fit allocation by default
+        
+        // Try to allocate each waiting process
+        processes.forEach(process => {
+          if (process.status === "Waiting") {
+            let allocated = bestFitAllocation(process);
+            process.status = allocated ? "Allocated" : "Failed";
+          }
+        });
+        
+        // Update UI
+        renderProcessTable();
+        renderMemoryBlocks();
+      }
+
+      function bestFitAllocation(process) {
+        let bestFitIndex = -1;
+        let bestFitSize = Infinity;
+        
+        // Find the smallest free block that can fit the process
+        for (let i = 0; i < memoryBlocks.length; i++) {
+          const block = memoryBlocks[i];
+          
+          if (block.status === "Free" && block.size >= process.size && block.size < bestFitSize) {
+            bestFitIndex = i;
+            bestFitSize = block.size;
+          }
+        }
+        
+        // If a suitable block was found
+        if (bestFitIndex !== -1) {
+          const block = memoryBlocks[bestFitIndex];
+          
+          // If block is exactly the right size
+          if (block.size === process.size) {
+            block.status = "Allocated";
+            block.processName = process.name;
+          } else {
+            // Split the block
+            const remainingSize = block.size - process.size;
+            const splitAddress = block.startAddress + process.size;
+            
+            // Update current block
+            block.size = process.size;
+            block.endAddress = splitAddress;
+            block.status = "Allocated";
+            block.processName = process.name;
+            
+            // Create new free block for remaining space
+            memoryBlocks.splice(bestFitIndex + 1, 0, {
+              id: memoryBlocks.length + 1,
+              startAddress: splitAddress,
+              endAddress: block.endAddress + remainingSize,
+              size: remainingSize,
+              status: "Free",
+              processName: null
+            });
+          }
+          
+          return true;
+        }
+        
+        return false;
+      }
+
+      function clearAll() {
+        // Reset processes to an empty array
+        processes = [];
+        
+        // Reset memory to a single free block
+        memoryBlocks = [{
+          id: 1,
+          startAddress: 0,
+          endAddress: TOTAL_MEMORY,
+          size: TOTAL_MEMORY,
+          status: "Free",
+          processName: null
+        }];
+        
+        // Clear inputs
+        processNameInput.value = "";
+        processSizeInput.value = "";
+        
+        // Update UI
+        renderProcessTable();
+        renderMemoryBlocks();
+      }
+
+      function renderProcessTable() {
+        const tableBody = document.querySelector("#process-table tbody");
+        tableBody.innerHTML = "";
+        
+        if (processes.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="3" class="text-center">No processes added</td>
+            </tr>
+          `;
+          return;
+        }
+        
+        processes.forEach(process => {
+          const row = document.createElement("tr");
+          
+          // Set status class for styling
+          const statusClass = process.status === "Allocated" ? "status-allocated" : 
+                             process.status === "Failed" ? "status-failed" : "status-waiting";
+          
+          row.innerHTML = `
+            <td>${process.name}</td>
+            <td>${process.size} MB</td>
+            <td class="${statusClass}">${process.status}</td>
+          `;
+          
+          tableBody.appendChild(row);
+        });
+      }
+
+      function renderMemoryBlocks() {
+        const container = document.getElementById("memory-blocks");
+        container.innerHTML = "";
+        
+        // Sort blocks by address before rendering
+        memoryBlocks.sort((a, b) => a.startAddress - b.startAddress);
+        
+        memoryBlocks.forEach(block => {
+          const blockEl = document.createElement("div");
+          blockEl.className = `memory-block ${block.status.toLowerCase()}`;
+          
+          let blockInfo;
+          if (block.status === "Allocated") {
+            blockInfo = `${block.processName} (${block.size} MB, ${block.startAddress} - ${block.endAddress} MB)`;
+          } else {
+            blockInfo = `Free ${block.size} MB (${block.startAddress} - ${block.endAddress} MB)`;
+          }
+          
+          blockEl.innerHTML = `
+            <span>Block #${block.id}</span>
+            <span>${blockInfo}</span>
+          `;
+          
+          container.appendChild(blockEl);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
